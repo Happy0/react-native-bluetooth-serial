@@ -30,11 +30,17 @@ public class WebsocketBridge extends WebSocketServer {
 
     private final BluetoothAdapter bluetoothAdapter;
     private final UUID serviceUUID;
+    private final ConnectionStatusNotifier connectionStatusNotifier;
 
-    public WebsocketBridge(int listenPort, BluetoothAdapter bluetoothAdapter, UUID serviceUUID) {
+    public WebsocketBridge(
+            int listenPort,
+            BluetoothAdapter bluetoothAdapter,
+            UUID serviceUUID,
+            ConnectionStatusNotifier connectionStatusNotifier) {
         super(listenLocalhost(listenPort));
         this.bluetoothAdapter = bluetoothAdapter;
         this.serviceUUID = serviceUUID;
+        this.connectionStatusNotifier = connectionStatusNotifier;
     }
 
     private static InetSocketAddress listenLocalhost(int port){
@@ -54,6 +60,9 @@ public class WebsocketBridge extends WebSocketServer {
         UnderlyingConnection underlyingConnection = conn.getAttachment();
         try {
             underlyingConnection.getBluetoothSocket().close();
+            this.connectionStatusNotifier.onDisconnect(
+                    conn.<UnderlyingConnection>getAttachment().getBluetoothSocket().getRemoteDevice().getAddress(), ""
+            );
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -61,7 +70,6 @@ public class WebsocketBridge extends WebSocketServer {
 
     @Override
     public void onMessage(final WebSocket conn, String message) {
-        d("wsbridge", message);
 
         UnderlyingConnection connectionDetails = conn.getAttachment();
 
@@ -104,8 +112,12 @@ public class WebsocketBridge extends WebSocketServer {
 
                 d("BluetoothSerialBridge", "Successfully connected to " + remoteAddress);
 
+                connectionStatusNotifier.onConnectionSuccess(remoteAddress, false);
+
             } catch (IOException e) {
                 conn.close(404, "Could not connect to bluetooth device " + remoteAddress);
+
+                connectionStatusNotifier.onConnectionFailure(remoteAddress, "");
 
                 Log.d("wsbridge", "Exception while connecting to bluetooth socket: " + e.getMessage());
             }
@@ -117,7 +129,9 @@ public class WebsocketBridge extends WebSocketServer {
         UnderlyingConnection underlyingConnection = conn.getAttachment();
 
         try {
-            underlyingConnection.bluetoothSocket.close();
+            if (underlyingConnection.getBluetoothSocket() != null) {
+                underlyingConnection.getBluetoothSocket().close();
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -138,7 +152,7 @@ public class WebsocketBridge extends WebSocketServer {
         Log.d("wsbridge", "Incoming bluetooth connection from " + bluetoothSocket.getRemoteDevice().getAddress());
 
         try {
-            URI address = new URI("ws://localhost:5667");
+            final URI address = new URI("ws://localhost:5667");
 
             WebSocketClient webSocketClient = new WebSocketClient(address) {
 
@@ -155,6 +169,8 @@ public class WebsocketBridge extends WebSocketServer {
                             readFromBluetoothAndSendToSocket(me, bluetoothSocket);
                         }
                     }).start();
+
+                    connectionStatusNotifier.onConnectionSuccess(bluetoothSocket.getRemoteDevice().getAddress(), true);
                 }
 
                 @Override
@@ -164,6 +180,12 @@ public class WebsocketBridge extends WebSocketServer {
                         bluetoothSocket.getOutputStream().write(Base64.decode(message, Base64.DEFAULT));
 
                     } catch (IOException e) {
+                        try {
+                            bluetoothSocket.close();
+                        } catch (IOException e1) {
+                            e1.printStackTrace();
+                        }
+
                         this.close(400, "Connection closed to " + bluetoothSocket.getRemoteDevice().getAddress());
                     }
                 }
@@ -172,6 +194,7 @@ public class WebsocketBridge extends WebSocketServer {
                 public void onClose(int code, String reason, boolean remote) {
                     try {
                         bluetoothSocket.close();
+                        connectionStatusNotifier.onDisconnect(bluetoothSocket.getRemoteDevice().getAddress(), reason);
                     } catch (IOException e) {
                         Log.d("wsbridge", "Closed. Reason: " + reason);
                         e.printStackTrace();
@@ -243,6 +266,13 @@ public class WebsocketBridge extends WebSocketServer {
                 d("wsbridge", "Error while reading from bluetooth socket: " + e.getMessage());
 
                 webSocket.close();
+
+                try {
+                    bluetoothSocket.close();
+                } catch (IOException e1) {
+                    e1.printStackTrace();
+                }
+
                 break;
             } catch (WebsocketNotConnectedException ex) {
                 try {

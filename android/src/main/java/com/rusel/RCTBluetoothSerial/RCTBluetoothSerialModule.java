@@ -277,11 +277,6 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
         }
     }
 
-    @ReactMethod
-    public void endAllConnections() {
-        mBluetoothService.endAllConnections();
-    }
-
     /**
      * Changes the device name. Requires the 'bluetooth admin' permission.
      * @param deviceName the device name
@@ -478,49 +473,6 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
         } else {
             promise.resolve(false);
         }
-    }
-
-    /********************************/
-    /** Connection related methods **/
-
-    @ReactMethod
-    /**
-     * Connect to device by id and service UUID
-     */
-    public void connect(String remoteAddress, String serviceUUID, Promise promise) {
-        mConnectedPromise = promise;
-        if (mBluetoothAdapter != null) {
-            BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(remoteAddress);
-
-            if (device != null) {
-                mBluetoothService.connect(device, serviceUUID);
-            } else {
-                promise.reject(new Exception("Could not connect to " + remoteAddress));
-            }
-        } else {
-            promise.reject(new Exception("todo: understand why this would happen"));
-        }
-    }
-
-    /*********************/
-    /** Write to device **/
-
-    @ReactMethod
-    /**
-     * Write to a connected device by address over serial port, and callback with 'true' once the write
-     * has finished
-     */
-    public void writeToDevice(String deviceAddress, String message, Callback successCallback) {
-        if (T) Log.v(TAG, "Write " + "[" + deviceAddress + "] " + message);
-
-        byte[] data = Base64.decode(message, Base64.DEFAULT);
-
-        // TODO: Do we want to write to a buffer rather than the socket output stream directly so that
-        // we don't have to wait on the socket write finishing before calling back?
-        mBluetoothService.write(deviceAddress, data);
-
-        // Allows the client to synchronise the writes
-        successCallback.invoke(true);
     }
 
     public void showYesNoDialog(final String message, final DialogInterface.OnClickListener dialogClickListener) {
