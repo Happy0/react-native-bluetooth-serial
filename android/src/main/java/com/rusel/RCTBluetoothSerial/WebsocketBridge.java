@@ -53,6 +53,8 @@ public class WebsocketBridge extends WebSocketServer {
     public void onOpen(WebSocket conn, ClientHandshake handshake) {
         UnderlyingConnection underlyingConnection = new UnderlyingConnection();
         conn.setAttachment(underlyingConnection);
+
+        this.setConnectionLostTimeout(500);
     }
 
     @Override
@@ -192,26 +194,29 @@ public class WebsocketBridge extends WebSocketServer {
 
                 @Override
                 public void onClose(int code, String reason, boolean remote) {
+                    Log.d("wsbridge", "Closed. Reason: " + reason);
+
                     try {
                         bluetoothSocket.close();
                         connectionStatusNotifier.onDisconnect(bluetoothSocket.getRemoteDevice().getAddress(), reason);
                     } catch (IOException e) {
-                        Log.d("wsbridge", "Closed. Reason: " + reason);
                         e.printStackTrace();
                     }
                 }
 
                 @Override
                 public void onError(Exception ex) {
+                    Log.d("wsbridge", "Error: " + ex.getMessage());
+
                     try {
                         bluetoothSocket.close();
                     } catch (IOException e) {
-                        Log.d("wsbridge", "Error: " + ex.getMessage());
                         e.printStackTrace();
                     }
                 }
             };
 
+            webSocketClient.setConnectionLostTimeout(300);
             webSocketClient.connect();
         } catch (URISyntaxException e) {
             Log.d("wsbridge", e.getMessage());
@@ -247,7 +252,7 @@ public class WebsocketBridge extends WebSocketServer {
             inputStream = bluetoothSocket.getInputStream();
         } catch (IOException e) {
             e.printStackTrace();
-            webSocket.close();
+            webSocket.close(400,"Error reading from bluetooth input stream");
 
             d("wsbridge", "Error while preparing to read from bluetooth socket: " + e.getMessage());
 
