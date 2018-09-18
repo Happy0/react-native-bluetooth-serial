@@ -18,11 +18,10 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Build;
+import android.os.ParcelUuid;
 import android.util.Log;
-import android.util.Base64;
 
 import com.facebook.react.bridge.ActivityEventListener;
-import com.facebook.react.bridge.Callback;
 import com.facebook.react.bridge.LifecycleEventListener;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
@@ -606,9 +605,17 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
 
         WritableMap params = Arguments.createMap();
 
+        WritableArray UUIDs = Arguments.createArray();
+
+        for (ParcelUuid uuid : device.getUuids()) {
+            String s = uuid.getUuid().toString();
+            UUIDs.pushString(s);
+        }
+
         params.putString("name", device.getName());
         params.putString("remoteAddress", device.getAddress());
         params.putString("id", device.getAddress());
+        params.putArray("services",  UUIDs);
 
         if (device.getBluetoothClass() != null) {
             params.putInt("class", device.getBluetoothClass().getDeviceClass());
@@ -726,6 +733,7 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
 
                 if (BluetoothDevice.ACTION_FOUND.equals(action)) {
                     BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+
                     WritableMap d = deviceToWritableMap(device);
                     unpairedDevices.pushMap(d);
                 } else if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED.equals(action)) {

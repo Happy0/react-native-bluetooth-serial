@@ -178,7 +178,6 @@ public class WebsocketBridge extends WebSocketServer {
                 @Override
                 public void onMessage(String message) {
                     try {
-                        Log.d("wsbridge", message);
                         bluetoothSocket.getOutputStream().write(Base64.decode(message, Base64.DEFAULT));
 
                     } catch (IOException e) {
