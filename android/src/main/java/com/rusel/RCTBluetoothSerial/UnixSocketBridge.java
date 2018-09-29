@@ -6,9 +6,11 @@ import android.bluetooth.BluetoothSocket;
 import android.net.LocalServerSocket;
 import android.net.LocalSocket;
 import android.net.LocalSocketAddress;
+import android.util.Log;
 
 import org.apache.commons.io.IOUtils;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.UUID;
@@ -21,6 +23,8 @@ public class UnixSocketBridge {
     private final ConnectionStatusNotifier connectionStatusNotifier;
     private final BluetoothAdapter bluetoothAdapter;
     private final UUID serviceUUID;
+
+    private static final String TAG = "bluetooth_bridge";
 
     public UnixSocketBridge(String socketOutgoingPath,
                             String socketIncomingPath,
@@ -92,10 +96,14 @@ public class UnixSocketBridge {
 
                         String address = new String(addressBuffer);
 
+                        Log.d(TAG, "Making outgoing bluetooth connection to " + address);
+
                         BluetoothDevice remoteDevice = bluetoothAdapter.getRemoteDevice(address);
                         bluetoothSocket = remoteDevice.createRfcommSocketToServiceRecord(serviceUUID);
 
                         bluetoothSocket.connect();
+
+                        connectionStatusNotifier.onConnectionSuccess(address, false);
 
                         Runnable reader = readFromBluetoothAndSendToSocket(socket, bluetoothSocket);
                         Runnable writer = readFromSocketAndSendToBluetooth(socket, bluetoothSocket);
@@ -103,19 +111,19 @@ public class UnixSocketBridge {
                         new Thread(reader).start();
                         new Thread(writer).start();
 
-                        connectionStatusNotifier.onConnectionSuccess(address, false);
                     }
 
                 } catch (IOException e) {
 
+                    Log.d(TAG, "Error making outgoing connection: " + e.getMessage());
+
                     if (bluetoothSocket != null) {
-                        closeBluetoothSocket(bluetoothSocket);
+                        close(bluetoothSocket);
                     }
 
                     if (socket != null) {
-                        closeSocket(socket);
+                        close(socket);
                     }
-
                 }
             }
         });
@@ -131,12 +139,7 @@ public class UnixSocketBridge {
         return new Runnable() {
             @Override
             public void run() {
-                try {
-                    IOUtils.copy(localSocket.getInputStream(), bluetoothSocket.getOutputStream());
-                } catch (IOException e) {
-                    closeBluetoothSocket(bluetoothSocket);
-                    closeSocket(localSocket);
-                }
+                copyStream(localSocket, bluetoothSocket, true);
             }
         };
 
@@ -147,28 +150,36 @@ public class UnixSocketBridge {
         return new Runnable() {
             @Override
             public void run() {
-                try {
-                    IOUtils.copy(bluetoothSocket.getInputStream(), localSocket.getOutputStream());
-                } catch (IOException e) {
-                    closeBluetoothSocket(bluetoothSocket);
-                    closeSocket(localSocket);
-                }
+                copyStream(localSocket, bluetoothSocket, false);
             }
         };
 
     }
 
-    private void closeSocket(LocalSocket localSocket) {
+    private void copyStream(LocalSocket localSocket, BluetoothSocket bluetoothSocket, boolean socketToBluetooth) {
+
         try {
-            localSocket.close();
+            if (socketToBluetooth) {
+                IOUtils.copy(localSocket.getInputStream(), bluetoothSocket.getOutputStream());
+            } else {
+                IOUtils.copy(bluetoothSocket.getInputStream(), localSocket.getOutputStream());
+            }
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.d(TAG, "IO err " + e.getMessage());
+        } finally {
+            close(bluetoothSocket);
+            close(localSocket);
+
+            // TODO: Use a thread pool / executor for the input stream thread and output stream thread, and only
+            // send this event once when one of them fails, and then end both threads.
+            connectionStatusNotifier.onDisconnect(bluetoothSocket.getRemoteDevice().getAddress(), "");
         }
+
     }
 
-    private void closeBluetoothSocket(BluetoothSocket bluetoothSocket) {
+    private void close(Closeable closeable) {
         try {
-            bluetoothSocket.close();
+            closeable.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
