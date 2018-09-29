@@ -93,12 +93,14 @@ public class UnixSocketBridge {
 
                         byte[] addressBuffer = new byte[12];
 
-                        int read = 0;
+                        int totalRead = 0;
 
                         // The first thing we receive is the remote bluetooth address to connect to,
                         // which is 12 characters long
-                        while (read < 12) {
-                            inputStream.read(addressBuffer, read, 12);
+                        while (totalRead < 12) {
+                            int read = inputStream.read(addressBuffer, totalRead, 12);
+
+                            totalRead += read;
                         }
 
                         String address = new String(addressBuffer);
