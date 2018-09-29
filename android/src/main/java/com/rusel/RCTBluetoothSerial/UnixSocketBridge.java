@@ -41,7 +41,9 @@ public class UnixSocketBridge {
     public void createIncomingServerConnection(final BluetoothSocket bluetoothSocket) {
 
         LocalSocket localSocket = new LocalSocket();
-        LocalSocketAddress localSocketAddress = new LocalSocketAddress(this.socketIncomingPath);
+        LocalSocketAddress localSocketAddress = new LocalSocketAddress(
+                this.socketIncomingPath
+        );
 
         try {
             localSocket.connect(localSocketAddress);
@@ -49,14 +51,13 @@ public class UnixSocketBridge {
             Runnable reader = readFromBluetoothAndSendToSocket(localSocket, bluetoothSocket);
             Runnable writer = readFromSocketAndSendToBluetooth(localSocket, bluetoothSocket);
 
+            connectionStatusNotifier.onConnectionSuccess(bluetoothSocket.getRemoteDevice().getAddress(), true);
+
             Thread thread = new Thread(reader);
             Thread thread2 = new Thread(writer);
 
             thread.start();
             thread2.start();
-
-            connectionStatusNotifier.onConnectionSuccess(bluetoothSocket.getRemoteDevice().getAddress(), true);
-
         } catch (IOException e) {
             connectionStatusNotifier.onConnectionFailure(
                     bluetoothSocket.getRemoteDevice().getAddress(),
@@ -67,6 +68,8 @@ public class UnixSocketBridge {
     }
 
     public void listenForOutgoingConnections() throws IOException {
+
+        Log.d(TAG, "Listening for outgoing connections");
 
         final LocalServerSocket localServerSocket = new LocalServerSocket(this.socketOutgoingPath);
 
@@ -79,6 +82,8 @@ public class UnixSocketBridge {
                 try {
 
                     while (true) {
+
+                        Log.d(TAG, "Awaiting next outgoing bluetooth connection to bridge");
 
                         socket = localServerSocket.accept();
 

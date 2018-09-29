@@ -61,8 +61,8 @@ class RCTBluetoothSerialService {
         ConnectionStatusNotifier connectionStatusNotifier = new ConnectionStatusNotifier(mModule);
 
         this.unixSocketBridge = new UnixSocketBridge(
-                "manyverse_bt_outgoing",
-                "manyverse_bt_incoming",
+                "manyverse_bt_outgoing.sock",
+                "manyverse_bt_incoming.sock",
                 uuid,
                 connectionStatusNotifier,
                 mAdapter
@@ -71,6 +71,7 @@ class RCTBluetoothSerialService {
         try {
             this.unixSocketBridge.listenForOutgoingConnections();
         } catch (IOException e) {
+            if (D) Log.d(TAG, "Err on outgoing bt bridge local socket: " + e.getMessage());
             e.printStackTrace();
         }
     }
