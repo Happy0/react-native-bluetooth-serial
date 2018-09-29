@@ -35,7 +35,8 @@ class RCTBluetoothSerialService {
 
     // Trace: for verbose output (raw messages being sent and received, etc.)
     private static final boolean T = false;
-    private final WebsocketBridge websocketBridge;
+
+    private final UnixSocketBridge unixSocketBridge;
 
     // UUIDs
 
@@ -59,8 +60,19 @@ class RCTBluetoothSerialService {
 
         ConnectionStatusNotifier connectionStatusNotifier = new ConnectionStatusNotifier(mModule);
 
-        this.websocketBridge = new WebsocketBridge(5666, mAdapter, uuid, connectionStatusNotifier);
-        this.websocketBridge.start();
+        this.unixSocketBridge = new UnixSocketBridge(
+                "manyverse_bt_outgoing",
+                "manyverse_bt_incoming",
+                uuid,
+                connectionStatusNotifier,
+                mAdapter
+                );
+
+        try {
+            this.unixSocketBridge.listenForOutgoingConnections();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -143,7 +155,7 @@ class RCTBluetoothSerialService {
                                     case DialogInterface.BUTTON_POSITIVE:
                                         if (D) Log.d(TAG, "Accepted incoming connection from: " + newConnection.getRemoteDevice().getAddress() + " bond state " + newConnection.getRemoteDevice().getBondState() );
 
-                                        websocketBridge.createIncomingServerConnection(newConnection);
+                                        unixSocketBridge.createIncomingServerConnection(newConnection);
                                         break;
 
                                     case DialogInterface.BUTTON_NEGATIVE:
@@ -165,7 +177,7 @@ class RCTBluetoothSerialService {
                         String address = newConnection.getRemoteDevice().getAddress();
                         if (D) Log.d( TAG, "Accepted incoming connection from " + address + " which has pre-existing bond." );
 
-                        websocketBridge.createIncomingServerConnection(newConnection);
+                        unixSocketBridge.createIncomingServerConnection(newConnection);
                     }
 
 
