@@ -11,6 +11,9 @@ import android.util.Log;
 import org.apache.commons.io.IOUtils;
 
 import java.io.Closeable;
+import java.io.File;
+import java.io.FileDescriptor;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.UUID;
@@ -42,7 +45,8 @@ public class UnixSocketBridge {
 
         LocalSocket localSocket = new LocalSocket();
         LocalSocketAddress localSocketAddress = new LocalSocketAddress(
-                this.socketIncomingPath
+                this.socketIncomingPath,
+                LocalSocketAddress.Namespace.FILESYSTEM
         );
 
         try {
@@ -61,6 +65,8 @@ public class UnixSocketBridge {
             thread.start();
             thread2.start();
         } catch (IOException e) {
+            Log.d(TAG, "IO err on connection to socket for incoming connection: " + e.getMessage());
+
             connectionStatusNotifier.onConnectionFailure(
                     bluetoothSocket.getRemoteDevice().getAddress(),
                     e.getMessage()
@@ -71,7 +77,7 @@ public class UnixSocketBridge {
 
     public void listenForOutgoingConnections() throws IOException {
 
-        Log.d(TAG, "Listening for outgoing connections");
+        Log.d(TAG, "Listening for outgoing connections. Sock path: " + this.socketOutgoingPath);
 
         final LocalServerSocket localServerSocket = new LocalServerSocket(this.socketOutgoingPath);
 
@@ -88,6 +94,8 @@ public class UnixSocketBridge {
                         Log.d(TAG, "Awaiting next outgoing bluetooth connection to bridge");
 
                         socket = localServerSocket.accept();
+
+                        Log.d(TAG, "Accepted connection from local server socket.");
 
                         InputStream inputStream = socket.getInputStream();
 
@@ -169,14 +177,20 @@ public class UnixSocketBridge {
 
     private void copyStream(LocalSocket localSocket, BluetoothSocket bluetoothSocket, boolean socketToBluetooth) {
 
+        FileDescriptor socketFd = localSocket.getFileDescriptor();
+
+        Log.d(TAG, "Local socket connection fd: " + socketFd.toString());
+
         try {
             if (socketToBluetooth) {
-                IOUtils.copy(localSocket.getInputStream(), bluetoothSocket.getOutputStream());
+                IOUtils.copyLarge(localSocket.getInputStream(), bluetoothSocket.getOutputStream());
             } else {
-                IOUtils.copy(bluetoothSocket.getInputStream(), localSocket.getOutputStream());
+                IOUtils.copyLarge(bluetoothSocket.getInputStream(), localSocket.getOutputStream());
             }
+
         } catch (IOException e) {
             Log.d(TAG, "IO err " + e.getMessage());
+            Log.d(TAG, "Socket fd: " + socketFd.toString());
         } finally {
             close(bluetoothSocket);
             close(localSocket);

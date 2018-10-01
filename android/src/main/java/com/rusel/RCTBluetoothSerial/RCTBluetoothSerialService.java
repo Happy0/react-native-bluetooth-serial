@@ -51,7 +51,7 @@ class RCTBluetoothSerialService {
      * Constructor. Prepares a new RCTBluetoothSerialModule session.
      * @param module Module which handles service events
      */
-    RCTBluetoothSerialService(RCTBluetoothSerialModule module) throws UnknownHostException {
+    RCTBluetoothSerialService(RCTBluetoothSerialModule module) {
         mAdapter = BluetoothAdapter.getDefaultAdapter();
         mModule = module;
 
@@ -61,8 +61,8 @@ class RCTBluetoothSerialService {
         ConnectionStatusNotifier connectionStatusNotifier = new ConnectionStatusNotifier(mModule);
 
         this.unixSocketBridge = new UnixSocketBridge(
-                "manyverse_bt_outgoing.sock",
-                "manyverse_bt_incoming.sock",
+                "/data/data/se.manyver/files/manyverse_bt_outgoing.sock",
+                "/data/data/se.manyver/files/manyverse_bt_incoming.sock",
                 uuid,
                 connectionStatusNotifier,
                 mAdapter
