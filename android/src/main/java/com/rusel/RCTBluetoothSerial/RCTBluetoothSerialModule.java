@@ -212,6 +212,11 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
         }
     }
 
+    @ReactMethod
+    public void connect(String address) {
+        mBluetoothService.connect(address);
+    }
+
     /**
      * Make the device discoverable for connection and pairing by other android devices
      * for the given amount of time in seconds. The user will be shown a dialog box to

@@ -61,20 +61,28 @@ class RCTBluetoothSerialService {
         ConnectionStatusNotifier connectionStatusNotifier = new ConnectionStatusNotifier(mModule);
 
         this.unixSocketBridge = new UnixSocketBridge(
-                "manyverse_bt_outgoing.sock",
+                "/data/data/se.manyver/files/manyverse_bt_outgoing.sock",
                 "/data/data/se.manyver/files/manyverse_bt_incoming.sock",
                 uuid,
                 connectionStatusNotifier,
                 mAdapter
                 );
 
+        startBridge();
+    }
+
+    public void startBridge() {
         try {
             this.unixSocketBridge.listenForOutgoingConnections();
-        } catch (IOException e) {
-            if (D) Log.d(TAG, "Err on outgoing bt bridge local socket: " + e.getMessage());
-            e.printStackTrace();
+        } catch (Exception ex) {
+            Log.d(TAG, "Could not start unix socket bridge");
         }
     }
+
+    public void connect(String address) {
+        this.unixSocketBridge.connectToBluetoothAddress(address);
+    }
+
 
     /**
      * Creates a server connection to listen for incoming connections.
@@ -83,11 +91,11 @@ class RCTBluetoothSerialService {
     public synchronized boolean startServerSocket(String serviceName, UUID serviceUUID) throws IOException {
 
         if (mServerListenThread == null) {
-    
+
             BluetoothServerSocket bluetoothServerSocket = BluetoothAdapter
                     .getDefaultAdapter()
                     .listenUsingRfcommWithServiceRecord(serviceName, serviceUUID);
-    
+
             // Listen for incoming connections on a new thread and put new entries into the
             // connected devices map
             mServerListenThread = new ServerListenThread(bluetoothServerSocket);
@@ -98,7 +106,7 @@ class RCTBluetoothSerialService {
            if (D) Log.d(TAG, "Already listening for incoming connections");
            return false;
         }
-        
+
     }
 
     /**

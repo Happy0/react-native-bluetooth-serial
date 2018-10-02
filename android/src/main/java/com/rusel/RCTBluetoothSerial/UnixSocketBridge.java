@@ -11,12 +11,11 @@ import android.util.Log;
 import org.apache.commons.io.IOUtils;
 
 import java.io.Closeable;
-import java.io.File;
 import java.io.FileDescriptor;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.UUID;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class UnixSocketBridge {
 
@@ -28,6 +27,8 @@ public class UnixSocketBridge {
     private final UUID serviceUUID;
 
     private static final String TAG = "bluetooth_bridge";
+
+    BlockingQueue<String> blockingQueue = new LinkedBlockingQueue<>();
 
     public UnixSocketBridge(String socketOutgoingPath,
                             String socketIncomingPath,
@@ -75,77 +76,77 @@ public class UnixSocketBridge {
 
     }
 
-    public void listenForOutgoingConnections() throws IOException {
+    public void connectToBluetoothAddress(String bluetoothAddress) {
+        Log.d(TAG, "adding to queue of awaiting connections: " + bluetoothAddress);
+        blockingQueue.add(bluetoothAddress);
+    }
 
-        Log.d(TAG, "Listening for outgoing connections. Sock path: " + this.socketOutgoingPath);
 
-        final LocalServerSocket localServerSocket = new LocalServerSocket(this.socketOutgoingPath);
+    public void listenForOutgoingConnections() {
+
+        Log.d(TAG, "Outgoing connections thread. Sock path: " + this.socketOutgoingPath);
 
         Thread thread = new Thread(new Runnable() {
             @Override
             public void run() {
-                LocalSocket socket = null;
-                BluetoothSocket bluetoothSocket = null;
 
-                try {
+                while (true) {
+                    try {
+                        String address = blockingQueue.take();
+                        Log.d(TAG, "Dequeue awaiting connection: " + address);
 
-                    while (true) {
+                        Log.d(TAG, "Opening unix socket connection to proxy the bluetooth connection.");
 
-                        Log.d(TAG, "Awaiting next outgoing bluetooth connection to bridge");
+                        LocalSocket localSocket = new LocalSocket();
+                        LocalSocketAddress localSocketAddress = new LocalSocketAddress(
+                                socketOutgoingPath, LocalSocketAddress.Namespace.FILESYSTEM
+                        );
 
-                        socket = localServerSocket.accept();
+                        try {
+                            localSocket.connect(localSocketAddress);
+                        } catch (IOException e) {
+                            Log.d(TAG, "Could not connect to unix socket to proxy bluetooth connection");
+                            e.printStackTrace();
 
-                        Log.d(TAG, "Accepted connection from local server socket.");
-
-                        InputStream inputStream = socket.getInputStream();
-
-                        byte[] addressBuffer = new byte[17];
-
-                        int totalRead = 0;
-
-                        // The first thing we receive is the remote bluetooth address to connect to,
-                        // which is 12 characters long
-                        while (totalRead < 17) {
-                            int read = inputStream.read(addressBuffer, totalRead, 17);
-
-                            Log.d(TAG, "Read address: " + new String(addressBuffer));
-
-                            totalRead += read;
+                            return;
                         }
 
-                        String address = new String(addressBuffer);
-
-                        Log.d(TAG, "Making outgoing bluetooth connection to " + address);
+                        Log.d(TAG, "Attempting bluetooth connection to " + address);
 
                         BluetoothDevice remoteDevice = bluetoothAdapter.getRemoteDevice(address);
-                        bluetoothSocket = remoteDevice.createRfcommSocketToServiceRecord(serviceUUID);
 
-                        bluetoothSocket.connect();
+                        try {
+                            BluetoothSocket bluetoothSocket =
+                                    remoteDevice.createRfcommSocketToServiceRecord(serviceUUID);
 
-                        connectionStatusNotifier.onConnectionSuccess(address, false);
+                            bluetoothSocket.connect();
 
-                        Runnable reader = readFromBluetoothAndSendToSocket(socket, bluetoothSocket);
-                        Runnable writer = readFromSocketAndSendToBluetooth(socket, bluetoothSocket);
+                            Log.d(TAG, "Connection successful to " + address);
 
-                        // TODO: Use thread executor and end other thread when on ends, then send disconnect
-                        // event
-                        new Thread(reader).start();
-                        new Thread(writer).start();
+                            Runnable reader = readFromSocketAndSendToBluetooth(localSocket, bluetoothSocket);
+                            Runnable writer = readFromBluetoothAndSendToSocket(localSocket, bluetoothSocket);
 
-                    }
+                            // Todo: Use executor / some way to stop the other thread when one thread stops.
 
-                } catch (IOException e) {
+                            Thread readerThread = new Thread(reader);
+                            Thread writerThread = new Thread(writer);
 
-                    Log.d(TAG, "Error making outgoing connection: " + e.getMessage());
+                            readerThread.start();
+                            writerThread.start();
 
-                    if (bluetoothSocket != null) {
-                        close(bluetoothSocket);
-                    }
+                            Log.d(TAG, "Started reader and writer threads");
+                        } catch (Exception ex) {
+                            Log.d(TAG, "Exception while connecting to " + address + ": " + ex.getMessage());
+                            close(localSocket);
+                        }
 
-                    if (socket != null) {
-                        close(socket);
+
+
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
                     }
                 }
+
             }
         });
 
