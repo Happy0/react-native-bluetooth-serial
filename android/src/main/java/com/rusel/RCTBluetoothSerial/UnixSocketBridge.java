@@ -107,7 +107,7 @@ public class UnixSocketBridge {
                         } catch (IOException e) {
                             Log.d(TAG, "Could not connect to unix socket to proxy bluetooth connection");
                             e.printStackTrace();
-
+                            connectionStatusNotifier.onConnectionFailure(address, e.getMessage());
                             return;
                         }
 
@@ -123,6 +123,8 @@ public class UnixSocketBridge {
 
                             Log.d(TAG, "Connection successful to " + address);
 
+                            connectionStatusNotifier.onConnectionSuccess(address, false);
+
                             Runnable reader = readFromSocketAndSendToBluetooth(localSocket, bluetoothSocket);
                             Runnable writer = readFromBluetoothAndSendToSocket(localSocket, bluetoothSocket);
 
@@ -137,6 +139,7 @@ public class UnixSocketBridge {
                             Log.d(TAG, "Started reader and writer threads");
                         } catch (Exception ex) {
                             Log.d(TAG, "Exception while connecting to " + address + ": " + ex.getMessage());
+                            connectionStatusNotifier.onConnectionFailure(address, ex.getMessage());
                             close(localSocket);
                         }
 
