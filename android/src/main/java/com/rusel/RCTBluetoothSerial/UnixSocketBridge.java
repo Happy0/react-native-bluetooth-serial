@@ -79,11 +79,16 @@ public class UnixSocketBridge {
 
         Log.d(TAG, "Listening for outgoing connections. Sock path: " + this.socketOutgoingPath);
 
-        final LocalServerSocket localServerSocket = new LocalServerSocket(this.socketOutgoingPath);
+        UnixServerSocket unixServerSocket = new UnixServerSocket(this.socketOutgoingPath);
+
+        FileDescriptor fileDescriptor = unixServerSocket.getFileDescriptor();
+
+        final LocalServerSocket localServerSocket = new LocalServerSocket(fileDescriptor);
 
         Thread thread = new Thread(new Runnable() {
             @Override
             public void run() {
+
                 LocalSocket socket = null;
                 BluetoothSocket bluetoothSocket = null;
 
@@ -117,20 +122,24 @@ public class UnixSocketBridge {
 
                         Log.d(TAG, "Making outgoing bluetooth connection to " + address);
 
-                        BluetoothDevice remoteDevice = bluetoothAdapter.getRemoteDevice(address);
-                        bluetoothSocket = remoteDevice.createRfcommSocketToServiceRecord(serviceUUID);
+                        try {
+                            BluetoothDevice remoteDevice = bluetoothAdapter.getRemoteDevice(address);
+                            bluetoothSocket = remoteDevice.createRfcommSocketToServiceRecord(serviceUUID);
 
-                        bluetoothSocket.connect();
+                            bluetoothSocket.connect();
 
-                        connectionStatusNotifier.onConnectionSuccess(address, false);
+                            connectionStatusNotifier.onConnectionSuccess(address, false);
 
-                        Runnable reader = readFromBluetoothAndSendToSocket(socket, bluetoothSocket);
-                        Runnable writer = readFromSocketAndSendToBluetooth(socket, bluetoothSocket);
+                            Runnable reader = readFromBluetoothAndSendToSocket(socket, bluetoothSocket);
+                            Runnable writer = readFromSocketAndSendToBluetooth(socket, bluetoothSocket);
 
-                        // TODO: Use thread executor and end other thread when on ends, then send disconnect
-                        // event
-                        new Thread(reader).start();
-                        new Thread(writer).start();
+                            // TODO: Use thread executor and end other thread when on ends, then send disconnect
+                            // event
+                            new Thread(reader).start();
+                            new Thread(writer).start();
+                        } catch (Exception ex) {
+                            Log.d(TAG, "Exception while connecting to remote device: " + ex.getMessage());
+                        }
 
                     }
 

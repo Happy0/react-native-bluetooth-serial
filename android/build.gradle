@@ -24,6 +24,11 @@ android {
             abiFilters "armeabi-v7a", "x86"
         }
     }
+    externalNativeBuild {
+        cmake {
+            path 'CMakeLists.txt'
+        }
+    }
 }
 
 

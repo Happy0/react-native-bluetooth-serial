@@ -61,7 +61,7 @@ class RCTBluetoothSerialService {
         ConnectionStatusNotifier connectionStatusNotifier = new ConnectionStatusNotifier(mModule);
 
         this.unixSocketBridge = new UnixSocketBridge(
-                "manyverse_bt_outgoing.sock",
+                "/data/data/se.manyver/files/manyverse_bt_outgoing",
                 "/data/data/se.manyver/files/manyverse_bt_incoming.sock",
                 uuid,
                 connectionStatusNotifier,
