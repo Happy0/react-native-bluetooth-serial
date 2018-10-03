@@ -58,8 +58,6 @@ public class UnixSocketBridge {
 
             connectionStatusNotifier.onConnectionSuccess(bluetoothSocket.getRemoteDevice().getAddress(), true);
 
-            // TODO: Use thread executor and end other thread when on ends, then send disconnect
-            // event
             Thread thread = new Thread(reader);
             Thread thread2 = new Thread(writer);
 
@@ -127,9 +125,7 @@ public class UnixSocketBridge {
 
                             Runnable reader = readFromSocketAndSendToBluetooth(localSocket, bluetoothSocket);
                             Runnable writer = readFromBluetoothAndSendToSocket(localSocket, bluetoothSocket);
-
-                            // Todo: Use executor / some way to stop the other thread when one thread stops.
-
+                            
                             Thread readerThread = new Thread(reader);
                             Thread writerThread = new Thread(writer);
 
@@ -176,6 +172,8 @@ public class UnixSocketBridge {
             @Override
             public void run() {
                 copyStream(localSocket, bluetoothSocket, false);
+
+                connectionStatusNotifier.onDisconnect(bluetoothSocket.getRemoteDevice().getAddress(), "");
             }
         };
 
@@ -200,10 +198,6 @@ public class UnixSocketBridge {
         } finally {
             close(bluetoothSocket);
             close(localSocket);
-
-            // TODO: Use a thread pool / executor for the input stream thread and output stream thread, and only
-            // send this event once when one of them fails, and then end both threads.
-            connectionStatusNotifier.onDisconnect(bluetoothSocket.getRemoteDevice().getAddress(), "");
         }
 
     }
