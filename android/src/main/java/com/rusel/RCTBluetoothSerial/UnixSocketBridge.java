@@ -186,8 +186,8 @@ public class UnixSocketBridge {
         Log.d(TAG, "Local socket connection fd: " + socketFd.toString());
 
         try {
-            // TODO: this approach works, but it could be more efficient by using non-blocking IO (at
-            // the moment the read / write calls block). We should consider Java NIO.
+            // TODO: measure throughput / investigate whether intermediate buffering or more concurrency
+            // could improve this. I'm curious...
             if (socketToBluetooth) {
                 IOUtils.copyLarge(localSocket.getInputStream(), bluetoothSocket.getOutputStream());
             } else {
