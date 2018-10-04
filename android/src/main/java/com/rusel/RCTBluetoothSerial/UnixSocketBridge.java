@@ -3,7 +3,6 @@ package com.rusel.RCTBluetoothSerial;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
-import android.net.LocalServerSocket;
 import android.net.LocalSocket;
 import android.net.LocalSocketAddress;
 import android.util.Log;
@@ -13,8 +12,10 @@ import org.apache.commons.io.IOUtils;
 import java.io.Closeable;
 import java.io.FileDescriptor;
 import java.io.IOException;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class UnixSocketBridge {
@@ -28,7 +29,9 @@ public class UnixSocketBridge {
 
     private static final String TAG = "bluetooth_bridge";
 
-    BlockingQueue<String> blockingQueue = new LinkedBlockingQueue<>();
+    private Map<String, BluetoothSocket> connectedDevices = new ConcurrentHashMap<>();
+
+    BlockingQueue<String> awaitingOutgoingConnection = new LinkedBlockingQueue<>();
 
     public UnixSocketBridge(String socketOutgoingPath,
                             String socketIncomingPath,
@@ -53,16 +56,26 @@ public class UnixSocketBridge {
         try {
             localSocket.connect(localSocketAddress);
 
-            Runnable reader = readFromBluetoothAndSendToSocket(localSocket, bluetoothSocket);
-            Runnable writer = readFromSocketAndSendToBluetooth(localSocket, bluetoothSocket);
+            String remoteAddress = bluetoothSocket.getRemoteDevice().getAddress();
+            if (connectedDevices.containsKey(remoteAddress)) {
+                Log.d(TAG, "Stopping incoming connection from " + remoteAddress + " as we're already connected.");
+                connectionStatusNotifier.onConnectionFailure(remoteAddress, "Already connected.");
 
-            connectionStatusNotifier.onConnectionSuccess(bluetoothSocket.getRemoteDevice().getAddress(), true);
+                close(localSocket);
+            } else {
+                Runnable reader = readFromBluetoothAndSendToSocket(localSocket, bluetoothSocket);
+                Runnable writer = readFromSocketAndSendToBluetooth(localSocket, bluetoothSocket);
 
-            Thread thread = new Thread(reader);
-            Thread thread2 = new Thread(writer);
+                connectionStatusNotifier.onConnectionSuccess(remoteAddress, true);
+                connectedDevices.put(remoteAddress, bluetoothSocket);
 
-            thread.start();
-            thread2.start();
+                Thread thread = new Thread(reader);
+                Thread thread2 = new Thread(writer);
+
+                thread.start();
+                thread2.start();
+            }
+
         } catch (IOException e) {
             Log.d(TAG, "IO err on connection to socket for incoming connection: " + e.getMessage());
 
@@ -76,7 +89,7 @@ public class UnixSocketBridge {
 
     public void connectToBluetoothAddress(String bluetoothAddress) {
         Log.d(TAG, "adding to queue of awaiting connections: " + bluetoothAddress);
-        blockingQueue.add(bluetoothAddress);
+        awaitingOutgoingConnection.add(bluetoothAddress);
     }
 
 
@@ -90,7 +103,7 @@ public class UnixSocketBridge {
 
                 while (true) {
                     try {
-                        String address = blockingQueue.take();
+                        String address = awaitingOutgoingConnection.take();
                         Log.d(TAG, "Dequeue awaiting connection: " + address);
 
                         Log.d(TAG, "Opening unix socket connection to proxy the bluetooth connection.");
@@ -111,6 +124,14 @@ public class UnixSocketBridge {
 
                         Log.d(TAG, "Attempting bluetooth connection to " + address);
 
+                        if (connectedDevices.containsKey(address)) {
+                            Log.d(TAG, "Stopping incoming connection from " + address + " as we're already connected.");
+
+                            close(localSocket);
+                            connectionStatusNotifier.onConnectionFailure(address, "Already connected.");
+                            return;
+                        }
+
                         BluetoothDevice remoteDevice = bluetoothAdapter.getRemoteDevice(address);
 
                         try {
@@ -121,6 +142,7 @@ public class UnixSocketBridge {
 
                             Log.d(TAG, "Connection successful to " + address);
 
+                            connectedDevices.put(address, bluetoothSocket);
                             connectionStatusNotifier.onConnectionSuccess(address, false);
 
                             Runnable reader = readFromSocketAndSendToBluetooth(localSocket, bluetoothSocket);
@@ -152,6 +174,13 @@ public class UnixSocketBridge {
         thread.start();
     }
 
+    public void closeAllOpenConnections() {
+        for (String address: connectedDevices.keySet()) {
+            BluetoothSocket bluetoothSocket = connectedDevices.get(address);
+            close(bluetoothSocket);
+        }
+    }
+
 
     private Runnable readFromSocketAndSendToBluetooth(final LocalSocket localSocket,
                                                       final BluetoothSocket bluetoothSocket)
@@ -173,7 +202,10 @@ public class UnixSocketBridge {
             public void run() {
                 copyStream(localSocket, bluetoothSocket, false);
 
-                connectionStatusNotifier.onDisconnect(bluetoothSocket.getRemoteDevice().getAddress(), "");
+                String remoteAddress = bluetoothSocket.getRemoteDevice().getAddress();
+                connectedDevices.remove(remoteAddress);
+
+                connectionStatusNotifier.onDisconnect(remoteAddress, "Connection lost.");
             }
         };
 

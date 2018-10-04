@@ -83,7 +83,6 @@ class RCTBluetoothSerialService {
         this.unixSocketBridge.connectToBluetoothAddress(address);
     }
 
-
     /**
      * Creates a server connection to listen for incoming connections.
      * return true if a server was not running and a new server was started, false is a server was already running.
