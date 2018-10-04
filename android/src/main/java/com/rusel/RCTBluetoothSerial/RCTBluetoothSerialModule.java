@@ -408,8 +408,8 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
     /**
      * Discover unpaired bluetooth devices
      */
-    public void discoverUnpairedDevices(final Promise promise) {
-        if (D) Log.d(TAG, "Discover unpaired called");
+    public void discoverNearbyDevices(final Promise promise) {
+        if (D) Log.d(TAG, "Discover nearby called");
 
         mDeviceDiscoveryPromise = promise;
         registerBluetoothDeviceDiscoveryReceiver();
@@ -612,9 +612,13 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
 
         WritableArray UUIDs = Arguments.createArray();
 
-        for (ParcelUuid uuid : device.getUuids()) {
-            String s = uuid.getUuid().toString();
-            UUIDs.pushString(s);
+        ParcelUuid[] uuids = device.getUuids();
+
+        if (uuids != null) {
+            for (ParcelUuid uuid : uuids) {
+                String s = uuid.getUuid().toString();
+                UUIDs.pushString(s);
+            }
         }
 
         params.putString("name", device.getName());
