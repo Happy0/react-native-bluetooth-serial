@@ -252,11 +252,7 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
 
     public void listenForIncomingConnections(String serviceName, String UUID) {
         UUID sspUuid = java.util.UUID.fromString(UUID);
-        try {
-            boolean started = mBluetoothService.startServerSocket(serviceName, sspUuid);
-        } catch (IOException e) {
-            if (D) Log.d(TAG, "Unexpected exception while trying to start incoming connections server: " + e.getMessage());
-        }
+        boolean started = mBluetoothService.startServerSocket(serviceName, sspUuid);
     }
 
     public void stopListeningForNewConnections(Promise promise) {

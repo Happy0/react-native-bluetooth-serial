@@ -54,7 +54,7 @@ class RCTBluetoothSerialService {
      * Constructor. Prepares a new RCTBluetoothSerialModule session.
      * @param module Module which handles service events
      */
-    RCTBluetoothSerialService(RCTBluetoothSerialModule module) throws IOException {
+    RCTBluetoothSerialService(RCTBluetoothSerialModule module) {
         mAdapter = BluetoothAdapter.getDefaultAdapter();
         mModule = module;
 
@@ -106,13 +106,19 @@ class RCTBluetoothSerialService {
      * Creates a server connection to listen for incoming connections.
      * return true if a server was not running and a new server was started, false is a server was already running.
      */
-    public synchronized boolean startServerSocket(String serviceName, UUID serviceUUID) throws IOException {
+    public synchronized boolean startServerSocket(String serviceName, UUID serviceUUID) {
 
         if (mServerListenThread == null) {
 
-            BluetoothServerSocket bluetoothServerSocket = BluetoothAdapter
-                    .getDefaultAdapter()
-                    .listenUsingRfcommWithServiceRecord(serviceName, serviceUUID);
+            BluetoothServerSocket bluetoothServerSocket = null;
+            try {
+                bluetoothServerSocket = BluetoothAdapter
+                        .getDefaultAdapter()
+                        .listenUsingRfcommWithServiceRecord(serviceName, serviceUUID);
+            } catch (IOException e) {
+                // TODO: how to handle this?
+                Log.d(TAG, "Could not listen for incoming bluetooth connections");
+            }
 
             // Listen for incoming connections on a new thread and put new entries into the
             // connected devices map
