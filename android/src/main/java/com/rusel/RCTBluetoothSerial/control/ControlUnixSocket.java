@@ -1,0 +1,234 @@
+package com.rusel.RCTBluetoothSerial.control;
+
+import android.net.LocalSocket;
+import android.net.LocalSocketAddress;
+import android.util.Log;
+
+import com.facebook.react.bridge.Promise;
+import com.fasterxml.jackson.core.JsonGenerationException;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rusel.RCTBluetoothSerial.RCTBluetoothSerialModule;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.HashMap;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+
+public class ControlUnixSocket {
+
+    private final String controlSocketPath;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final RCTBluetoothSerialModule bluetoothSerialModule;
+
+    private final static String TAG = "bt_control_socket";
+
+    /**
+     * The commands to be written to the output stream in a thread safe way.
+     */
+    private final BlockingQueue<BluetoothControlCommand> commandResponseQueue = new LinkedBlockingQueue();
+
+    public ControlUnixSocket(String unixSocketFilepath, RCTBluetoothSerialModule bluetoothSerialModule) {
+        this.controlSocketPath = unixSocketFilepath;
+        this.bluetoothSerialModule = bluetoothSerialModule;
+
+        // Don't close the mapper as we will be reading and writing multiple incoming and outgoing
+        // JSON objects
+        objectMapper.configure(JsonParser.Feature.AUTO_CLOSE_SOURCE, false);
+    }
+
+    /**
+     * Start in a new thread.
+     */
+    public void start() {
+        // TODO: handle IO errors? Restart the thread?
+
+        Thread thread = new Thread(controlSocketThread());
+        thread.start();
+    }
+
+    public void sendConnectedEvent(String remoteAddress, boolean isIncoming) {
+        HashMap<String, Object> params = new HashMap<>();
+        params.put("remoteAddress", remoteAddress);
+        params.put("isIncoming", isIncoming);
+
+        BluetoothControlCommand command = new BluetoothControlCommand("connected", params);
+
+        commandResponseQueue.add(command);
+    }
+
+    public void sendConnectionFailureEvent(String remoteAddress, String reason) {
+        sendLifeCycleEvent("connectionFailure", remoteAddress, reason);
+    }
+
+    public void sendDisconnectionEvent(String remoteAddress, String reason) {
+        sendLifeCycleEvent("disconnected", remoteAddress, null);
+    }
+
+    private void sendLifeCycleEvent(String state, String remoteAddress, String reason) {
+        HashMap<String, Object> params = new HashMap<>();
+        params.put("remoteAddress", remoteAddress);
+        params.put("reason", reason);
+
+        BluetoothControlCommand command = new BluetoothControlCommand(state, params);
+
+        commandResponseQueue.add(command);
+    }
+
+    private Runnable controlSocketThread() {
+        return new Runnable() {
+            @Override
+            public void run() {
+                LocalSocket localSocket = establishConnection(10);
+
+                Thread responseWriter =  new Thread(responseWriterThread(localSocket));
+                responseWriter.start();
+
+                handleCommands(localSocket);
+            }
+        };
+    }
+
+    private Runnable responseWriterThread(final LocalSocket localSocket) {
+
+        return new Runnable() {
+            @Override
+            public void run() {
+                boolean error = false;
+                while (!error) {
+                    try {
+                        OutputStream outputStream = localSocket.getOutputStream();
+                        BluetoothControlCommand commandResponse = commandResponseQueue.take();
+
+                        Log.d(TAG, "Sending response" + commandResponse.getCommand());
+                        Log.d(TAG, "Response arguments: " + commandResponse.getArguments());
+
+                        Log.d(TAG, "Attempting to write command to control socket.");
+                        byte[] bytes = objectMapper.writeValueAsBytes(commandResponse);
+                        outputStream.write(bytes);
+
+                        Log.d(TAG, "Attempting to write double line to control socket.");
+                        // For convenience on the other side of the socket using pull-json-doubleline
+                        String doubleNewLine = "\n\n";
+                        outputStream.write(doubleNewLine.getBytes());
+
+                        Log.d(TAG, "Successfully sent response");
+                    } catch (InterruptedException e) {
+                        Log.d(TAG, "interrupted exception while writing: " + e.getMessage());
+
+                        e.printStackTrace();
+                        error = true;
+                    } catch (JsonGenerationException e) {
+                        Log.d(TAG, "json generation exception while writing: " + e.getMessage());
+
+                        e.printStackTrace();
+                        error = true;
+                    } catch (JsonMappingException e) {
+                        Log.d(TAG, "json mapping exception while writing: " + e.getMessage());
+
+                        e.printStackTrace();
+                        error = true;
+                    } catch (IOException e) {
+                        e.printStackTrace();
+
+                        Log.d(TAG, "IO exception while writing: " + e.getMessage());
+                        error = true;
+                    }
+                }
+            }
+        };
+    }
+
+    private void handleCommands(LocalSocket socket) {
+        try {
+            InputStream inputStream = socket.getInputStream();
+
+            while (true) {
+                // Each command is sent as a JSON payload, so we continue reading new command
+                // objects while the thread is open
+                // TODO: more fine grained / well typed deserialization ?
+
+                BluetoothControlCommand bluetoothControlCommand =
+                        objectMapper.readValue(inputStream, BluetoothControlCommand.class);
+
+                Log.d(TAG, "Socket is connected? " + socket.isConnected());
+
+                doCommand(bluetoothControlCommand);
+            }
+
+        } catch (IOException e) {
+
+            // TODO: reconnect?
+
+            e.printStackTrace();
+        }
+
+
+    }
+
+    private void doCommand(BluetoothControlCommand bluetoothControlCommand) {
+
+        String commandName = bluetoothControlCommand.getCommand();
+
+        Log.d(TAG, "Performing command: " + commandName);
+
+
+        if (commandName.equals("connect")) {
+            String remoteAddress = bluetoothControlCommand.getArgumentAsString("remoteAddress");
+
+            Log.d(TAG, "Connecting to remote address: " + remoteAddress);
+            bluetoothSerialModule.connect(remoteAddress);
+        }
+        else if (commandName.equals("discoverDevices")) {
+            Log.d(TAG, "Discovering nearby devives");
+
+            DiscoveredDevicesHandler devicesHandler = new DiscoveredDevicesHandler(commandResponseQueue);
+            bluetoothSerialModule.discoverNearbyDevices(devicesHandler);
+        }
+
+    }
+
+
+    private LocalSocket establishConnection(int retries) {
+
+        if (retries < 0) {
+
+            return null;
+        }
+
+        Log.d(TAG, "connecting to control socket");
+
+        LocalSocketAddress localSocketAddress = new LocalSocketAddress(this.controlSocketPath,
+                LocalSocketAddress.Namespace.FILESYSTEM);
+
+        LocalSocket localSocket = new LocalSocket();
+
+        try {
+            localSocket.connect(localSocketAddress);
+            Log.d(TAG, "Established connection to control socket.");
+        } catch (IOException e) {
+            e.printStackTrace();
+
+            Log.d(TAG, "Error establishing connection to control socket: " + e.getMessage() + " retries remaining: " + retries);
+
+            try {
+                // Retry after 10 seconds
+                Thread.sleep(10000);
+
+                return establishConnection(retries -1);
+            } catch (InterruptedException e1) {
+                e1.printStackTrace();
+            }
+
+        }
+
+        return localSocket;
+    }
+
+
+
+}

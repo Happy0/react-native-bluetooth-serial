@@ -18,6 +18,8 @@ import android.content.DialogInterface;
 import android.util.Base64;
 import android.util.Log;
 
+import com.rusel.RCTBluetoothSerial.control.ControlUnixSocket;
+
 import static com.rusel.RCTBluetoothSerial.RCTBluetoothSerialPackage.TAG;
 
 /**
@@ -37,6 +39,7 @@ class RCTBluetoothSerialService {
     private static final boolean T = false;
 
     private final UnixSocketBridge unixSocketBridge;
+    private final ControlUnixSocket controlSocket;
 
     // UUIDs
 
@@ -68,7 +71,11 @@ class RCTBluetoothSerialService {
                 mAdapter
                 );
 
+        this.controlSocket = new ControlUnixSocket(
+                "/data/data/se.manyver/files/manyverse_bt_control.sock", mModule);
+
         startBridge();
+        startControlSocket();
     }
 
     public void startBridge() {
@@ -79,8 +86,16 @@ class RCTBluetoothSerialService {
         }
     }
 
+    public void startControlSocket() {
+        this.controlSocket.start();
+    }
+
     public void connect(String address) {
         this.unixSocketBridge.connectToBluetoothAddress(address);
+    }
+
+    public ControlUnixSocket getControlSocket() {
+        return controlSocket;
     }
 
     /**

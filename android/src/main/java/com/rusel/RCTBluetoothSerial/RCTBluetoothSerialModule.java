@@ -3,6 +3,8 @@ package com.rusel.RCTBluetoothSerial;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -31,6 +33,7 @@ import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
+import com.rusel.RCTBluetoothSerial.control.DiscoveredDevicesHandler;
 
 import static com.facebook.react.bridge.UiThreadUtil.runOnUiThread;
 import static com.rusel.RCTBluetoothSerial.RCTBluetoothSerialPackage.TAG;
@@ -69,8 +72,6 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
 
     // Promises
     private Promise mEnabledPromise;
-    private Promise mConnectedPromise;
-    private Promise mDeviceDiscoveryPromise;
     private Promise mPairDevicePromise;
     private Promise mDeviceDiscoverablePromise;
     private String delimiter = "";
@@ -381,43 +382,18 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
         promise.resolve(true);
     }
 
-    /**************************************/
-    /** Bluetooth device related methods **/
-
-    @ReactMethod
-    /**
-     * List paired bluetooth devices
-     */
-    public void list(Promise promise) {
-        WritableArray deviceList = Arguments.createArray();
-        if (mBluetoothAdapter != null) {
-            Set<BluetoothDevice> bondedDevices = mBluetoothAdapter.getBondedDevices();
-
-            for (BluetoothDevice rawDevice : bondedDevices) {
-                WritableMap device = deviceToWritableMap(rawDevice);
-
-                if (D) Log.d(TAG, "Existing paired device found: " + rawDevice.getAddress());
-
-                deviceList.pushMap(device);
-            }
-        }
-        promise.resolve(deviceList);
-    }
-
     @ReactMethod
     /**
      * Discover unpaired bluetooth devices
      */
-    public void discoverNearbyDevices(final Promise promise) {
+    public void discoverNearbyDevices(DiscoveredDevicesHandler handler) {
         if (D) Log.d(TAG, "Discover nearby called");
 
-        mDeviceDiscoveryPromise = promise;
-        registerBluetoothDeviceDiscoveryReceiver();
+        // todo: handle error?
+        registerBluetoothDeviceDiscoveryReceiver(handler);
 
         if (mBluetoothAdapter != null) {
             mBluetoothAdapter.startDiscovery();
-        } else {
-            promise.resolve(Arguments.createArray());
         }
     }
 
@@ -515,11 +491,7 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
      * @param msg Additional message
      */
     void onConnectionSuccess(String address, String msg, boolean isIncoming) {
-        WritableMap params = Arguments.createMap();
-        params.putString("remoteAddress", address);
-        params.putString("message", msg);
-        params.putBoolean("isIncoming", isIncoming);
-        sendEvent(CONN_SUCCESS, params);
+        this.mBluetoothService.getControlSocket().sendConnectedEvent(address, isIncoming);
     }
 
     /**
@@ -527,15 +499,7 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
      * @param msg Additional message
      */
     void onConnectionFailed(String address, String msg) {
-        WritableMap params = Arguments.createMap();
-
-        params.putString("remoteAddress", address);
-        params.putString("message", msg);
-        sendEvent(CONN_FAILED, params);
-        if (mConnectedPromise != null) {
-            mConnectedPromise.reject(new Exception(msg));
-        }
-        mConnectedPromise = null;
+        this.mBluetoothService.getControlSocket().sendConnectionFailureEvent(address, msg);
     }
 
     /**
@@ -543,10 +507,7 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
      * @param msg Message
      */
     void onConnectionLost (String address, String msg) {
-        WritableMap params = Arguments.createMap();
-        params.putString("remoteAddress", address);
-        params.putString("message", msg);
-        sendEvent(CONN_LOST, params);
+        this.mBluetoothService.getControlSocket().sendDisconnectionEvent(address, msg);
     }
 
     /**
@@ -554,25 +515,9 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
      * @param e Exception
      */
     void onError (Exception e) {
-        WritableMap params = Arguments.createMap();
-        params.putString("message", e.getMessage());
-        sendEvent(ERROR, params);
+
     }
 
-    /**
-     * Handle read
-     * @param base64data The array of bytes received over the socket, encoded to a Base64 string.
-     */
-    void onData (String bluetoothDeviceAddress, String base64data) {
-
-        if (T) Log.v(TAG, "address: " + bluetoothDeviceAddress);
-
-        WritableMap params = Arguments.createMap();
-
-        params.putString("remoteAddress", bluetoothDeviceAddress);
-        params.putString("data", base64data);
-        sendEvent(DEVICE_READ, params);
-    }
 
     /*********************/
     /** Private methods **/
@@ -600,37 +545,6 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
         } else {
             Log.d(TAG, "Cannot send event as there is no active catalyst instance");
         }
-    }
-
-    /**
-     * Convert BluetoothDevice into WritableMap
-     * @param device Bluetooth device
-     */
-    private WritableMap deviceToWritableMap(BluetoothDevice device) {
-
-        WritableMap params = Arguments.createMap();
-
-        WritableArray UUIDs = Arguments.createArray();
-
-        ParcelUuid[] uuids = device.getUuids();
-
-        if (uuids != null) {
-            for (ParcelUuid uuid : uuids) {
-                String s = uuid.getUuid().toString();
-                UUIDs.pushString(s);
-            }
-        }
-
-        params.putString("name", device.getName());
-        params.putString("remoteAddress", device.getAddress());
-        params.putString("id", device.getAddress());
-        params.putArray("services",  UUIDs);
-
-        if (device.getBluetoothClass() != null) {
-            params.putInt("class", device.getBluetoothClass().getDeviceClass());
-        }
-
-        return params;
     }
 
     /**
@@ -727,30 +641,27 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
 
     /**
      * Register receiver for bluetooth device discovery
+     * @param handler
      */
-    private void registerBluetoothDeviceDiscoveryReceiver() {
+    private void registerBluetoothDeviceDiscoveryReceiver(final DiscoveredDevicesHandler handler) {
         IntentFilter intentFilter = new IntentFilter();
 
         intentFilter.addAction(BluetoothDevice.ACTION_FOUND);
         intentFilter.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
 
         final BroadcastReceiver deviceDiscoveryReceiver = new BroadcastReceiver() {
-            private WritableArray unpairedDevices = Arguments.createArray();
+            private List<BluetoothDevice> devices = new ArrayList<>();
             public void onReceive(Context context, Intent intent) {
                 String action = intent.getAction();
                 if (D) Log.d(TAG, "onReceive called");
 
                 if (BluetoothDevice.ACTION_FOUND.equals(action)) {
                     BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-
-                    WritableMap d = deviceToWritableMap(device);
-                    unpairedDevices.pushMap(d);
+                    devices.add(device);
                 } else if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED.equals(action)) {
                     if (D) Log.d(TAG, "Discovery finished");
-                    if (mDeviceDiscoveryPromise != null) {
-                        mDeviceDiscoveryPromise.resolve(unpairedDevices);
-                        mDeviceDiscoveryPromise = null;
-                    }
+
+                    handler.onDiscovered(devices);
 
                     try {
                         mReactContext.unregisterReceiver(this);

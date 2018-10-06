@@ -18,6 +18,11 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
+/**
+ * A class for proxying incoming and outgoing bluetooth connections to another process / thread via
+ * local unix sockets. This is for use cases where you have a thread / process, perhaps in another language,
+ * that you want to leverage bluetooth functionality in.
+ */
 public class UnixSocketBridge {
 
 
