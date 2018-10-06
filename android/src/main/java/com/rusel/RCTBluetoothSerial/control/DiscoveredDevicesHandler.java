@@ -21,8 +21,6 @@ public class DiscoveredDevicesHandler implements DiscoveredBluetoothDevicesHandl
     public void onDiscovered(List<BluetoothDevice> devices) {
 
         Map<String, Object> properties = new HashMap<>();
-        properties.put("remoteAddress", devices);
-
 
         List<BluetoothDeviceProperties> deviceProperties = new ArrayList<>();
 
@@ -48,7 +46,10 @@ public class DiscoveredDevicesHandler implements DiscoveredBluetoothDevicesHandl
 
         // Unlikely, but since we're using pull-json-doubleline on the other end, a bluetooth device
         // name with new lines in it could make things crash
-        String name = device.getName().replace("\n", "");
+
+        String deviceName = device.getName() == null ? "" : device.getName();
+
+        String name = deviceName.replace("\n", "");
 
         return new BluetoothDeviceProperties(device.getAddress(), name);
     }

@@ -175,6 +175,7 @@ public class ControlUnixSocket {
         String commandName = bluetoothControlCommand.getCommand();
 
         Log.d(TAG, "Performing command: " + commandName);
+        Log.d(TAG, "Command arguments" + bluetoothControlCommand.getArguments() );
 
 
         if (commandName.equals("connect")) {
@@ -184,10 +185,15 @@ public class ControlUnixSocket {
             bluetoothSerialModule.connect(remoteAddress);
         }
         else if (commandName.equals("discoverDevices")) {
-            Log.d(TAG, "Discovering nearby devives");
+            Log.d(TAG, "Discovering nearby devices");
 
             DiscoveredDevicesHandler devicesHandler = new DiscoveredDevicesHandler(commandResponseQueue);
             bluetoothSerialModule.discoverNearbyDevices(devicesHandler);
+        } else if (commandName.equals("makeDiscoverable")) {
+
+            int timeDiscoverable = bluetoothControlCommand.getArgumentAsInt("forTime");
+
+            bluetoothSerialModule.makeDeviceDiscoverable(timeDiscoverable);
         }
 
     }

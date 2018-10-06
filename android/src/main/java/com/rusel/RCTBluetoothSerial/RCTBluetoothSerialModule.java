@@ -224,15 +224,15 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
      * confirm where they want to make the device discoverable. Events will be broadcast
      * on state changes to the discoverability of this device.
      *
-     * A promise is returned which will be populated with 'true' if the device was successfully
-     * made discoverable, and will throw an exception if the user rejected the request.
      */
-    @ReactMethod
-    public void makeDeviceDiscoverable(int timeSeconds, Promise promise) {
+    public void makeDeviceDiscoverable(int timeSeconds) {
+
+        if (D) Log.d(TAG, "Making device discoverable for "  + timeSeconds + " seconds");
 
         if (mDeviceDiscoverablePromise == null ) {
             Activity currentActivity = getCurrentActivity();
 
+            // todo: refactor this based on control socket changes
             if (currentActivity == null) {
                 Exception e = new Exception("Cannot make device discoverable because activity is null");
                 Log.e(TAG, "Cannot make device discoverable because activity is null", e);
@@ -241,15 +241,11 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
                 onError(e);
             }
 
-            mDeviceDiscoverablePromise = promise;
-
             // Make the device discoverable for a limited duration
             Intent discoverableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE);
             discoverableIntent.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, timeSeconds);
 
             currentActivity.startActivityForResult(discoverableIntent, REQUEST_MAKE_DISCOVERABLE);
-        } else {
-            promise.reject(new Exception("Already awaiting user response on whether the device can be made discoverable."));
         }
 
     }

@@ -31,4 +31,11 @@ public class BluetoothControlCommand {
     public String getArgumentAsString(String key) {
         return String.valueOf(arguments.get(key));
     }
+
+    public int getArgumentAsInt(String key) {
+        String argumentAsString = getArgumentAsString(key);
+
+        // todo: handle exception
+        return Integer.parseInt(argumentAsString);
+    }
 }
