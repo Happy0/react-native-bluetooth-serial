@@ -54,7 +54,7 @@ class RCTBluetoothSerialService {
      * Constructor. Prepares a new RCTBluetoothSerialModule session.
      * @param module Module which handles service events
      */
-    RCTBluetoothSerialService(RCTBluetoothSerialModule module) {
+    RCTBluetoothSerialService(RCTBluetoothSerialModule module) throws IOException {
         mAdapter = BluetoothAdapter.getDefaultAdapter();
         mModule = module;
 
@@ -76,6 +76,10 @@ class RCTBluetoothSerialService {
 
         startBridge();
         startControlSocket();
+
+        // TODO: start this from the control unix socket with params if instructed to.
+        // just always start for now.
+        startServerSocket("scuttlebutt", UUID.fromString("b0b2e90d-0cda-4bb0-8e4b-fb165cd17d48"));
     }
 
     public void startBridge() {
