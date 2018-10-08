@@ -8,6 +8,8 @@ public interface DiscoveredBluetoothDevicesHandler {
 
     void onDiscovered(List<BluetoothDevice> devices);
 
-    void onErrorDiscovering(String exception);
+    void onBluetoothDisabled();
+
+    void onBluetoothNotSupported();
 
 }

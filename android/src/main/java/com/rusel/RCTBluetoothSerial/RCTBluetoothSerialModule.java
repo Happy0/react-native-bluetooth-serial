@@ -374,6 +374,12 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
         // todo: handle error?
         registerBluetoothDeviceDiscoveryReceiver(handler);
 
+        if (mBluetoothAdapter == null ) {
+            handler.onBluetoothNotSupported();
+        } else if (!mBluetoothAdapter.isEnabled()) {
+            handler.onBluetoothDisabled();
+        }
+
         if (mBluetoothAdapter != null) {
             mBluetoothAdapter.startDiscovery();
         }

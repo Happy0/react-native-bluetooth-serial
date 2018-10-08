@@ -38,8 +38,27 @@ public class DiscoveredDevicesHandler implements DiscoveredBluetoothDevicesHandl
     }
 
     @Override
-    public void onErrorDiscovering(String exception) {
-        // TODO
+    public void onBluetoothDisabled() {
+        Map<String, Object> error = new HashMap<>();
+        error.put("error", true);
+        error.put("errorCode", "bluetoothDisabled");
+        error.put("description", "Bluetooth is not enabled");
+
+        BluetoothControlCommand errorCommand = new BluetoothControlCommand("discovered", error);
+
+        commandResponseBuffer.add(errorCommand);
+    }
+
+    @Override
+    public void onBluetoothNotSupported() {
+        Map<String, Object> error = new HashMap<>();
+        error.put("error", true);
+        error.put("errorCode", "notSupported");
+        error.put("description", "Bluetooth is not supported on this device.");
+
+        BluetoothControlCommand errorCommand = new BluetoothControlCommand("discovered", error);
+
+        commandResponseBuffer.add(errorCommand);
     }
 
     public BluetoothDeviceProperties getDeviceProperties(BluetoothDevice device) {
