@@ -193,7 +193,10 @@ public class ControlUnixSocket {
 
             int timeDiscoverable = bluetoothControlCommand.getArgumentAsInt("forTime");
 
-            bluetoothSerialModule.makeDeviceDiscoverable(timeDiscoverable);
+            MakeDeviceDiscoverableHandler responseHandler
+                    = new MakeDeviceDiscoverableHandler(commandResponseQueue);
+
+            bluetoothSerialModule.makeDeviceDiscoverable(timeDiscoverable, responseHandler);
         }
 
     }

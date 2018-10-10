@@ -34,6 +34,7 @@ import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 import com.rusel.RCTBluetoothSerial.control.DiscoveredDevicesHandler;
+import com.rusel.RCTBluetoothSerial.control.MakeDeviceDiscoverableHandler;
 
 import static com.facebook.react.bridge.UiThreadUtil.runOnUiThread;
 import static com.rusel.RCTBluetoothSerial.RCTBluetoothSerialPackage.TAG;
@@ -73,10 +74,10 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
     // Promises
     private Promise mEnabledPromise;
     private Promise mPairDevicePromise;
-    private Promise mDeviceDiscoverablePromise;
-    private String delimiter = "";
 
-    public RCTBluetoothSerialModule(ReactApplicationContext reactContext) throws UnknownHostException {
+    private MakeDeviceDiscoverableHandler makeDeviceDiscoverableHandler = null;
+
+    public RCTBluetoothSerialModule(ReactApplicationContext reactContext) {
         super(reactContext);
 
         if (D) Log.d(TAG, "Bluetooth module started");
@@ -100,7 +101,6 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
         mReactContext.addActivityEventListener(this);
         mReactContext.addLifecycleEventListener(this);
         registerBluetoothStateReceiver();
-        registerBluetoothDeviceDiscoverabilityStateReceiver();
     }
 
     @Override
@@ -132,18 +132,24 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
             if (resultCode > 0) {
                 if (D) Log.d(TAG, "User allowed the device to be discovered.");
 
-                if (mDeviceDiscoverablePromise != null)
-                    mDeviceDiscoverablePromise.resolve(true);
+                if (makeDeviceDiscoverableHandler != null) {
+                    long currentTime = System.currentTimeMillis();
+                    long discoverableForMillis = resultCode * 1000;
+                    long estimatedDiscoverableUntil = currentTime + discoverableForMillis;
+
+                    makeDeviceDiscoverableHandler.handleSuccess(estimatedDiscoverableUntil);
+                }
+
             } else {
                 if (D) Log.d(TAG, "User did not allow the device to be discovered") ;
                 if (D) Log.d(TAG, "Result code was: " + resultCode);
 
-                if (mDeviceDiscoverablePromise != null)
-                    mDeviceDiscoverablePromise.reject(new Exception("User did not allow device to be made discoverable"));
+                if (makeDeviceDiscoverableHandler != null)
+                    makeDeviceDiscoverableHandler.handleUserDidNotAllow();
             }
 
             // Will be made non-null again on future discoverability requests
-            mDeviceDiscoverablePromise = null;
+            makeDeviceDiscoverableHandler = null;
         }
         else if (requestCode == REQUEST_PAIR_DEVICE) {
             if (resultCode == Activity.RESULT_OK) {
@@ -221,30 +227,27 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
     /**
      * Make the device discoverable for connection and pairing by other android devices
      * for the given amount of time in seconds. The user will be shown a dialog box to
-     * confirm where they want to make the device discoverable. Events will be broadcast
-     * on state changes to the discoverability of this device.
+     * confirm where they want to make the device discoverable.
      *
+     * The handler handles the error / success of this request
      */
-    public void makeDeviceDiscoverable(int timeSeconds) {
+    public synchronized void makeDeviceDiscoverable(int timeSeconds, MakeDeviceDiscoverableHandler handler) {
 
-        if (D) Log.d(TAG, "Making device discoverable for "  + timeSeconds + " seconds");
+        if (D) Log.d(TAG, "Asking to make device discoverable for "  + timeSeconds + " seconds");
 
-        if (mDeviceDiscoverablePromise == null ) {
-            Activity currentActivity = getCurrentActivity();
+        Activity currentActivity = getCurrentActivity();
 
-            // todo: refactor this based on control socket changes
-            if (currentActivity == null) {
-                Exception e = new Exception("Cannot make device discoverable because activity is null");
-                Log.e(TAG, "Cannot make device discoverable because activity is null", e);
-                mEnabledPromise.reject(e);
-                mEnabledPromise = null;
-                onError(e);
-            }
-
+        if (makeDeviceDiscoverableHandler != null) {
+            handler.handleAlreadyInProgress();
+        } else if (currentActivity == null) {
+            if (D) Log.d(TAG, "Cannot make device discoverable because activity is null");
+            handler.handleAppNotAtFront();
+        } else {
             // Make the device discoverable for a limited duration
             Intent discoverableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE);
             discoverableIntent.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, timeSeconds);
 
+            this.makeDeviceDiscoverableHandler = handler;
             currentActivity.startActivityForResult(discoverableIntent, REQUEST_MAKE_DISCOVERABLE);
         }
 
@@ -282,48 +285,6 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
         return mBluetoothAdapter.getName();
     }
 
-    /**
-     * Register for events about changes in where this device is discoverable by other bluetooth
-     * devices when they're doing device scans, then send events that can be registered to.
-     */
-    private void registerBluetoothDeviceDiscoverabilityStateReceiver() {
-
-        IntentFilter intentFilter = new IntentFilter();
-        intentFilter.addAction(BluetoothAdapter.ACTION_DISCOVERY_STARTED);
-        intentFilter.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
-        intentFilter.addAction(BluetoothAdapter.ACTION_SCAN_MODE_CHANGED);
-
-        final BroadcastReceiver discoverabilityReceiver = new BroadcastReceiver() {
-            public void onReceive(Context context, Intent intent) {
-
-                final String action = intent.getAction();
-
-                if(action.equals(BluetoothAdapter.ACTION_SCAN_MODE_CHANGED)) {
-
-                    int mode = intent.getIntExtra(BluetoothAdapter.EXTRA_SCAN_MODE, BluetoothAdapter.ERROR);
-
-                    switch(mode){
-                        case BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE:
-                            if (D) Log.d(TAG, "Device discoverable");
-                            sendEvent(DEVICE_DISCOVERABLE, null);
-                            break;
-                        case BluetoothAdapter.SCAN_MODE_CONNECTABLE:
-                            if (D) Log.d(TAG, "Device not discoverable");
-                            sendEvent(DEVICE_NOT_DISCOVERABLE, null);
-                            break;
-                        case BluetoothAdapter.SCAN_MODE_NONE:
-                            if (D) Log.d(TAG, "Device not discoverable or connectable");
-                            sendEvent(DEVICE_NOT_CONNECTABLE, null);
-                            break;
-                    }
-                }
-
-            }
-        };
-
-        mReactContext.registerReceiver(discoverabilityReceiver, intentFilter);
-    }
-
     @ReactMethod
     /**
      * Enable bluetooth
@@ -358,13 +319,6 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
         }
     }
 
-    @ReactMethod
-    public void withDelimiter(String delimiter, Promise promise) {
-        this.delimiter = delimiter;
-        promise.resolve(true);
-    }
-
-    @ReactMethod
     /**
      * Discover unpaired bluetooth devices
      */
@@ -385,7 +339,6 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
         }
     }
 
-    @ReactMethod
     /**
      * Cancel discovery
      */
