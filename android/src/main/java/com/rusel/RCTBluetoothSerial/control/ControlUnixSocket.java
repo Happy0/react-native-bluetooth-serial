@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -197,6 +198,17 @@ public class ControlUnixSocket {
                     = new MakeDeviceDiscoverableHandler(commandResponseQueue);
 
             bluetoothSerialModule.makeDeviceDiscoverable(timeDiscoverable, responseHandler);
+        } else if (commandName.equals("isEnabled")) {
+            Log.d(TAG, "Checking if bluetooth is enabled");
+
+            boolean bluetoothIsEnabled = bluetoothSerialModule.isEnabled();
+
+            Map<String, Object> arguments = new HashMap<>();
+            arguments.put("enabled", bluetoothIsEnabled);
+
+            BluetoothControlCommand command = new BluetoothControlCommand("isEnabled", arguments);
+
+            commandResponseQueue.add(command);
         }
 
     }

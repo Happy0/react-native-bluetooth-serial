@@ -307,15 +307,14 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
         promise.resolve(true);
     }
 
-    @ReactMethod
     /**
      * Check if bluetooth is enabled
      */
-    public void isEnabled(Promise promise) {
+    public boolean isEnabled() {
         if (mBluetoothAdapter != null) {
-            promise.resolve(mBluetoothAdapter.isEnabled());
+            return mBluetoothAdapter.isEnabled();
         } else {
-            promise.resolve(false);
+            return false;
         }
     }
 
