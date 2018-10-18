@@ -12,8 +12,8 @@ public class ConnectionStatusNotifier {
         serialModule.onConnectionSuccess(remoteAddress, "", incoming);
     }
 
-    public void onConnectionFailure(String remoteAddress, String reason) {
-        serialModule.onConnectionFailed(remoteAddress, reason);
+    public void onConnectionFailure(String remoteAddress, String reason, boolean incoming) {
+        serialModule.onConnectionFailed(remoteAddress, reason, incoming);
     }
 
     public void onDisconnect(String remoteAddress, String reason) {

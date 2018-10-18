@@ -64,7 +64,7 @@ public class UnixSocketBridge {
             String remoteAddress = bluetoothSocket.getRemoteDevice().getAddress();
             if (connectedDevices.containsKey(remoteAddress)) {
                 Log.d(TAG, "Stopping incoming connection from " + remoteAddress + " as we're already connected.");
-                connectionStatusNotifier.onConnectionFailure(remoteAddress, "Already connected.");
+                connectionStatusNotifier.onConnectionFailure(remoteAddress, "Already connected.", true);
 
                 close(localSocket);
             } else {
@@ -86,7 +86,8 @@ public class UnixSocketBridge {
 
             connectionStatusNotifier.onConnectionFailure(
                     bluetoothSocket.getRemoteDevice().getAddress(),
-                    e.getMessage()
+                    e.getMessage(),
+                    true
             );
         }
 
@@ -123,7 +124,7 @@ public class UnixSocketBridge {
                         } catch (IOException e) {
                             Log.d(TAG, "Could not connect to unix socket to proxy bluetooth connection");
                             e.printStackTrace();
-                            connectionStatusNotifier.onConnectionFailure(address, e.getMessage());
+                            connectionStatusNotifier.onConnectionFailure(address, e.getMessage(), false);
                             return;
                         }
 
@@ -133,7 +134,7 @@ public class UnixSocketBridge {
                             Log.d(TAG, "Stopping incoming connection from " + address + " as we're already connected.");
 
                             close(localSocket);
-                            connectionStatusNotifier.onConnectionFailure(address, "Already connected.");
+                            connectionStatusNotifier.onConnectionFailure(address, "Already connected.", false);
                             return;
                         }
 
@@ -162,7 +163,7 @@ public class UnixSocketBridge {
                             Log.d(TAG, "Started reader and writer threads");
                         } catch (Exception ex) {
                             Log.d(TAG, "Exception while connecting to " + address + ": " + ex.getMessage());
-                            connectionStatusNotifier.onConnectionFailure(address, ex.getMessage());
+                            connectionStatusNotifier.onConnectionFailure(address, ex.getMessage(), false);
                             close(localSocket);
                         }
 

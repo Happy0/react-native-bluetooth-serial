@@ -438,8 +438,8 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
      * handle connection failure
      * @param msg Additional message
      */
-    void onConnectionFailed(String address, String msg) {
-        this.mBluetoothService.getControlSocket().sendConnectionFailureEvent(address, msg);
+    void onConnectionFailed(String address, String msg, boolean isIncoming) {
+        this.mBluetoothService.getControlSocket().sendConnectionFailureEvent(address, msg, isIncoming);
     }
 
     /**

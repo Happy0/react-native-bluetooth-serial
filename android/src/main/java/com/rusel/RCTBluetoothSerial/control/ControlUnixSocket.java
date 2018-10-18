@@ -62,18 +62,19 @@ public class ControlUnixSocket {
         commandResponseQueue.add(command);
     }
 
-    public void sendConnectionFailureEvent(String remoteAddress, String reason) {
-        sendLifeCycleEvent("connectionFailure", remoteAddress, reason);
+    public void sendConnectionFailureEvent(String remoteAddress, String reason, boolean isIncoming) {
+        sendLifeCycleEvent("connectionFailure", remoteAddress, reason, isIncoming);
     }
 
     public void sendDisconnectionEvent(String remoteAddress, String reason) {
-        sendLifeCycleEvent("disconnected", remoteAddress, null);
+        sendLifeCycleEvent("disconnected", remoteAddress, null, null);
     }
 
-    private void sendLifeCycleEvent(String state, String remoteAddress, String reason) {
+    private void sendLifeCycleEvent(String state, String remoteAddress, String reason, Boolean isIncoming) {
         HashMap<String, Object> params = new HashMap<>();
         params.put("remoteAddress", remoteAddress);
         params.put("reason", reason);
+        params.put("isIncoming", isIncoming);
 
         BluetoothControlCommand command = new BluetoothControlCommand(state, params);
 
