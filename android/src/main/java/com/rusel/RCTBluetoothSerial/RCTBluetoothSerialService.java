@@ -53,26 +53,31 @@ class RCTBluetoothSerialService {
     /**
      * Constructor. Prepares a new RCTBluetoothSerialModule session.
      * @param module Module which handles service events
+     * @param configuration
      */
-    RCTBluetoothSerialService(RCTBluetoothSerialModule module) {
+    RCTBluetoothSerialService(RCTBluetoothSerialModule module, BluetoothSerialConfiguration configuration) {
         mAdapter = BluetoothAdapter.getDefaultAdapter();
         mModule = module;
 
         // Hardcode for now
         UUID uuid = UUID.fromString("b0b2e90d-0cda-4bb0-8e4b-fb165cd17d48");
 
+        String outgoingSocketPath = configuration.getOutgoingSocketPath();
+        String incomingSocketPath = configuration.getIncomingSocketPath();
+        String controlSocketPath = configuration.getControlSocketPath();
+
         ConnectionStatusNotifier connectionStatusNotifier = new ConnectionStatusNotifier(mModule);
 
         this.unixSocketBridge = new UnixSocketBridge(
-                "/data/data/se.manyver/files/manyverse_bt_outgoing.sock",
-                "/data/data/se.manyver/files/manyverse_bt_incoming.sock",
+                outgoingSocketPath,
+                incomingSocketPath,
                 uuid,
                 connectionStatusNotifier,
                 mAdapter
                 );
 
         this.controlSocket = new ControlUnixSocket(
-                "/data/data/se.manyver/files/manyverse_bt_control.sock", mModule);
+                controlSocketPath, mModule);
 
         startBridge();
         startControlSocket();

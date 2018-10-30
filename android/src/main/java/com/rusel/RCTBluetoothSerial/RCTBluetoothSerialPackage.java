@@ -11,11 +11,18 @@ import com.facebook.react.uimanager.ViewManager;
 
 public class RCTBluetoothSerialPackage implements ReactPackage {
     static final String TAG = "BluetoothSerial";
+    private final BluetoothSerialConfiguration configuration;
+
+    public RCTBluetoothSerialPackage(BluetoothSerialConfiguration configuration) {
+        super();
+
+        this.configuration = configuration;
+    }
 
     @Override
     public List<NativeModule> createNativeModules(ReactApplicationContext reactContext) {
         List<NativeModule> modules = new ArrayList<>();
-        modules.add(new RCTBluetoothSerialModule(reactContext));
+        modules.add(new RCTBluetoothSerialModule(reactContext, configuration));
         return modules;
     }
 

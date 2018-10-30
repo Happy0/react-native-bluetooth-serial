@@ -77,7 +77,8 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
 
     private MakeDeviceDiscoverableHandler makeDeviceDiscoverableHandler = null;
 
-    public RCTBluetoothSerialModule(ReactApplicationContext reactContext) {
+    public RCTBluetoothSerialModule(ReactApplicationContext reactContext,
+                                    BluetoothSerialConfiguration configuration) {
         super(reactContext);
 
         if (D) Log.d(TAG, "Bluetooth module started");
@@ -89,7 +90,7 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
         }
 
         if (mBluetoothService == null) {
-            mBluetoothService = new RCTBluetoothSerialService(this);
+            mBluetoothService = new RCTBluetoothSerialService(this, configuration);
         }
 
         if (mBluetoothAdapter != null && mBluetoothAdapter.isEnabled()) {
